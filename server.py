@@ -3,7 +3,6 @@ import json
 import requests
 from typing import List
 from fastmcp import FastMCP
-from fastmcp.server.auth.providers.auth0 import Auth0Provider
 
 DEBUG_LOGGING = os.getenv("DEBUG_LOGGING", "false").lower() == "true"
 
@@ -16,40 +15,8 @@ def log_info(message):
 
 def log_error(message):
     print(f"[ERROR] {message}", flush=True)
-
-# Auth0 OAuth Configuration
-# Get Auth0 configuration from environment variables
-AUTH0_CONFIG_URL = os.getenv("AUTH0_CONFIG_URL")  # e.g., https://your-domain.auth0.com/.well-known/openid-configuration
-AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
-AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET")
-AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE")
-AUTH0_BASE_URL = os.getenv("AUTH0_BASE_URL", "http://localhost:8000")  # Your server URL
-AUTH0_REDIRECT_PATH = os.getenv("AUTH0_REDIRECT_PATH", "/auth/callback")
-
-# Initialize Auth0 provider if all required config is present
-auth_provider = None
-if AUTH0_CONFIG_URL and AUTH0_CLIENT_ID and AUTH0_CLIENT_SECRET and AUTH0_AUDIENCE:
-    try:
-        auth_config = {
-            "config_url": AUTH0_CONFIG_URL,
-            "client_id": AUTH0_CLIENT_ID,
-            "client_secret": AUTH0_CLIENT_SECRET,
-            "audience": AUTH0_AUDIENCE,
-            "base_url": AUTH0_BASE_URL,
-            "redirect_path": AUTH0_REDIRECT_PATH,
-        }
-        
-        auth_provider = Auth0Provider(**auth_config)
-        log_info("Auth0 OAuth provider initialized successfully")
-    except Exception as e:
-        log_error(f"Failed to initialize Auth0 provider: {e}")
-        auth_provider = None
-else:
-    log_info("Auth0 configuration not found. Server will run without authentication.")
-    log_info("To enable Auth0, set: AUTH0_CONFIG_URL, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET, AUTH0_AUDIENCE")
-
 # Initialize FastMCP with optional Auth0 authentication
-mcp = FastMCP("test_mcp", auth=auth_provider)
+mcp = FastMCP("test_mcp")
 
 # Secrets must come from env vars (NOT hardcoded)
 CLICKUP_TOKEN = os.getenv("CLICKUP_TOKEN")
@@ -94,22 +61,10 @@ def extract_entire_doc_v3(workspace_id, doc_id):
         log_error(f"Extraction Error: {response.status_code} - {response.text}")
         return {"error": f"API Error: {response.status_code}", "message": response.text}
 
-# Auth0 authentication test tool (only works when Auth0 is configured)
-@mcp.tool()
-async def get_token_info() -> dict:
-    """Returns information about the Auth0 token. Only available when Auth0 is configured."""
-    if not auth_provider:
-        return {"error": "Auth0 is not configured"}
-    
-    try:
-        from fastmcp.server.dependencies import get_access_token
-        token = get_access_token()
-        return {
-            "issuer": token.claims.get("iss"),
-            "audience": token.claims.get("aud"),
-            "scope": token.claims.get("scope"),
-            "sub": token.claims.get("sub")
-        }
-    except Exception as e:
-        log_error(f"Error getting token info: {e}")
-        return {"error": str(e)}
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", "8000"))
+    mcp.run(
+        transport="streamable-http",
+        host="0.0.0.0",
+        port=port,
+    )
